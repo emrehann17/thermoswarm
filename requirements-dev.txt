@@ -1,0 +1,17 @@
+# ThermoSwarm — Python Development & Log Analysis Dependencies
+# ============================================================================
+# ONEMLI NOT:
+# 1. ROS 2 ucus betikleri (scripts/*.py) yalnizca Python standart kutuphanelerini,
+#    sistem genelindeki ROS 2 Jazzy (`rclpy`) paketini ve colcon ile derlenen
+#    `px4_msgs` paketini kullanir. Ucus calisma zamani (.venv-ros veya sistem
+#    /usr/bin/python3) icin EK BIR PIP PAKETINE IHTIYAC YOKTUR.
+#    ROS 2 paketlerini (`rclpy`, `px4_msgs` vb.) asla pip ile kurmayin.
+#
+# 2. Asagidaki paketler YALNIZCA PX4 ULog (.ulg) ucus loglarinin cevrimdisi
+#    analizi (.venv-logs ortami) icindir:
+#      python3 -m venv .venv-logs
+#      .venv-logs/bin/pip install -r requirements-dev.txt
+# ============================================================================
+
+pyulog==1.2.4
+numpy==2.5.4

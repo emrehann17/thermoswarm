@@ -1,0 +1,25 @@
+# ThermoSwarm fleet design reference (2026-10-21)
+# IMPORTANT: This file is NOT consumed by the current v3 flight script yet.
+# Keep the values aligned with the verified 2026-10-19 three-X500 SITL demonstration.
+schema_version: 1
+vehicles:
+  - name: x500_1
+    px4_instance: 1
+    system_id: 2
+    namespace: /px4_1
+    spawn_xy_m: [0, 0]
+    takeoff_altitude_m: 5
+
+  - name: x500_2
+    px4_instance: 2
+    system_id: 3
+    namespace: /px4_2
+    spawn_xy_m: [5, 0]
+    takeoff_altitude_m: 8
+
+  - name: x500_3
+    px4_instance: 3
+    system_id: 4
+    namespace: /px4_3
+    spawn_xy_m: [10, 0]
+    takeoff_altitude_m: 11

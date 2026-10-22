@@ -1,0 +1,9 @@
+{
+    "cmake.sourceDirectory": "/home/emrehan-metin/projects/thermal-swarm-sitl-poc/PX4-Autopilot",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv-ros/bin/python",
+    "python.analysis.extraPaths": [
+        "/opt/ros/jazzy/lib/python3.12/site-packages",
+        "${workspaceFolder}/ros2_ws/install/px4_msgs/lib/python3.12/site-packages",
+        "${workspaceFolder}/scripts"
+    ]
+}

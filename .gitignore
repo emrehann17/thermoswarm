@@ -1,0 +1,58 @@
+# Python virtual environments
+.venv-ros/
+.venv-logs/
+__pycache__/
+*.py[cod]
+
+# ROS 2 colcon workspace build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# External source repositories
+/PX4-Autopilot/
+/Micro-XRCE-DDS-Agent/
+/ros2_ws/src/px4_msgs/
+
+# Local development environments
+/.venv*/
+/thermoswarm_architecture_seed/
+/thermoswarm_architecture_seed.zip
+
+# Windows metadata
+*:Zone.Identifier
+
+# Generated flight and simulation data
+*.ulg
+/artifacts/
+/logs/
+/rosbags/
+
+# Additional ROS build outputs
+**/build/
+**/install/
+**/log/
+
+# External source repositories
+/PX4-Autopilot/
+/Micro-XRCE-DDS-Agent/
+/ros2_ws/src/px4_msgs/
+
+# Local development environments
+/.venv*/
+/thermoswarm_architecture_seed/
+/thermoswarm_architecture_seed.zip
+
+# Windows metadata
+*:Zone.Identifier
+
+# Generated flight and simulation data
+*.ulg
+/artifacts/
+/logs/
+/rosbags/
+
+# Additional ROS build outputs
+**/build/
+**/install/
+**/log/
