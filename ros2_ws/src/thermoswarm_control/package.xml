@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>thermoswarm_control</name>
+  <version>0.1.0</version>
+  <description>ThermoSwarm ROS2 control package (refactor phase 1)</description>
+  <maintainer email="you@example.com">Your Name</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <depend>rclpy</depend>
+  <depend>px4_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>
