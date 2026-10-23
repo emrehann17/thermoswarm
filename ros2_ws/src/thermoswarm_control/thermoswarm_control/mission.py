@@ -29,7 +29,8 @@ from px4_msgs.msg import (
     VehicleCommand,
 )
 from .offboard import ACK_OK, CMD_NAMES
-from .safety import CLIMB_CHECK_S, MIN_CLIMB_M, Safety, classify_climb
+from .config import load_config
+from .safety import Safety, classify_climb
 from .vehicle import create_fleet
 
 LEG_TIMEOUT_S = 40.0
@@ -38,10 +39,12 @@ DIAG_PERIOD_S = 2.0
 class Mission:
     """Own the mission phase machine and per-vehicle route progression."""
 
-    def __init__(self, execute, isolate_failures=False, logger=None):
+    def __init__(self, execute, isolate_failures=False, logger=None, config=None):
         self.execute = execute
         self.isolate = isolate_failures
-        self.aircraft = create_fleet()
+        self.config = config or load_config()
+        self.safety_config = self.config.safety
+        self.aircraft = create_fleet(self.config)
         self.offboard = None
         self.logger = logger
         self.phase = 'WAIT'
@@ -52,7 +55,7 @@ class Mission:
         self.audit_fresh_since = None
         self.aborted = False
         self.reason = ''
-        self.safety = Safety(self)
+        self.safety = Safety(self, self.safety_config)
 
     def change(self, phase):
         self.phase = phase
@@ -95,11 +98,8 @@ class Mission:
             p = a.position
             x, y, z, yaw = float(p.x), float(p.y), float(p.z-a.altitude_m), float(p.heading)
             a.route = [
-                ('KALKIS', (x, y, z, yaw)),
-                ('KUZEY_2M', (x+2, y, z, yaw)),
-                ('DOGU_2M', (x+2, y+2, z, yaw)),
-                ('GUNEY_2M', (x, y+2, z, yaw)),
-                ('EVE_DON', (x, y, z, yaw)),
+                (point.name, (x + point.north_m, y + point.east_m, z, yaw))
+                for point in self.config.route
             ]
             a.waypoint, a.leg_since, a.dwell_since, a.complete = 0, now, None, False
             a.start_z, a.max_climb, a.flight_since = float(p.z), 0.0, None
@@ -130,7 +130,7 @@ class Mission:
                 if all(self.safety.fresh(a, now) for a in self.aircraft):
                     if self.audit_fresh_since is None:
                         self.audit_fresh_since = now
-                    if now - self.audit_fresh_since >= 1.0:
+                    if now - self.audit_fresh_since >= self.safety_config.audit_fresh_duration_s:
                         self.logger.info('--- UC IHA TELEMETRI VE PREFLIGHT DENETIMI ---')
                         self.report(now)
                         if all(self.safety.ready(a, now) for a in self.aircraft):
@@ -146,9 +146,9 @@ class Mission:
                         return
                 else:
                     self.audit_fresh_since = None
-                if now - self.phase_since > 25:
+                if now - self.phase_since > self.safety_config.audit_timeout_s:
                     self.logger.error(
-                        'AUDIT FAILED: 25 sn icinde uc arac icin guncel konum ve '
+                        f'AUDIT FAILED: {self.safety_config.audit_timeout_s:g} sn icinde uc arac icin guncel konum ve '
                         'durum telemetrisi bir araya gelemedi. Ucus komutu gonderilmedi.')
                     self.report(now)
                     self.change('FAILED')
@@ -157,8 +157,10 @@ class Mission:
                 self.prepare(now)
                 self.change('WARMUP')
                 return
-            if now - self.phase_since > 90:
-                self.logger.error('90 sn: uc arac ayni anda preflight READY degil. Ucus baslatilmadi.')
+            if now - self.phase_since > self.safety_config.readiness_timeout_s:
+                self.logger.error(
+                    f'{self.safety_config.readiness_timeout_s:g} sn: uc arac ayni anda preflight READY degil. '
+                    'Ucus baslatilmadi.')
                 self.change('FAILED')
             return
 
@@ -186,7 +188,7 @@ class Mission:
 
         if self.phase == 'WARMUP':
             self.heartbeat_count += 1
-            if self.heartbeat_count >= 20:
+            if self.heartbeat_count >= self.safety_config.offboard_warmup_heartbeats:
                 if not all(self.safety.ready(a, now) for a in self.aircraft):
                     self.safety.request_landing('WARMUP sonunda preflight bozuldu', abort=True)
                     return
@@ -247,10 +249,13 @@ class Mission:
                 self.diag(a, now)
                 if a.complete:
                     continue
-                if a.waypoint == 0 and classify_climb(now - a.flight_since, a.max_climb) == 'NO_CLIMB':
+                if a.waypoint == 0 and classify_climb(
+                    now - a.flight_since, a.max_climb,
+                    self.safety_config.climb_check_s, self.safety_config.min_climb_m,
+                ) == 'NO_CLIMB':
                     self.safety.fail_vehicle(
-                        a, f'YUKSELME YOK: arm+Offboard {CLIMB_CHECK_S:.0f} sn dogrulandi fakat '
-                        f'max tirmanis {a.max_climb:.2f} m < {MIN_CLIMB_M} m. Fiziksel engel / '
+                        a, f'YUKSELME YOK: arm+Offboard {self.safety_config.climb_check_s:.0f} sn dogrulandi fakat '
+                        f'max tirmanis {a.max_climb:.2f} m < {self.safety_config.min_climb_m} m. Fiziksel engel / '
                         'Gazebo model cakismasi olasi (thermoswarm_gz_world_check.py)', now)
                     if self.phase != 'FLIGHT':
                         return
@@ -258,10 +263,11 @@ class Mission:
                 label, (tx, ty, tz, _) = a.route[a.waypoint]
                 xy_error = math.hypot(a.position.x-tx, a.position.y-ty)
                 z_error = abs(a.position.z-tz)
-                if xy_error < 0.6 and z_error < 0.5:
+                if (xy_error < self.safety_config.waypoint_xy_tolerance_m
+                        and z_error < self.safety_config.waypoint_z_tolerance_m):
                     if a.dwell_since is None:
                         a.dwell_since = now
-                    if now-a.dwell_since >= 1.5:
+                    if now-a.dwell_since >= self.safety_config.waypoint_dwell_s:
                         self.logger.info(
                             f'px4_{a.index} ULASILDI {label}: xy={xy_error:.2f} m, z={z_error:.2f} m')
                         if a.waypoint + 1 == len(a.route):
@@ -274,7 +280,7 @@ class Mission:
                         a.dwell_since = None
                 else:
                     a.dwell_since = None
-                if not a.complete and now-a.leg_since > LEG_TIMEOUT_S:
+                if not a.complete and now-a.leg_since > self.safety_config.leg_timeout_s:
                     self.safety.fail_vehicle(a, f'waypoint zaman asimi: {label}', now)
                     if self.phase != 'FLIGHT':
                         return
@@ -282,7 +288,7 @@ class Mission:
             if all(a.state != 'ACTIVE' for a in self.aircraft):
                 n_ok = sum(a.state == 'COMPLETE' for a in self.aircraft)
                 self.safety.request_landing(f'{n_ok}/3 rota tamamlandi', abort=n_ok < 3)
-            elif now-self.phase_since > 180:
+            elif now-self.phase_since > self.safety_config.mission_timeout_s:
                 for a in self.aircraft:
                     if a.state == 'ACTIVE':
                         a.state, a.reason = 'FAILED', 'genel ucus zaman asimi'

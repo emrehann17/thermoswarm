@@ -75,7 +75,7 @@ To maintain strict academic and engineering transparency, ThermoSwarm distinguis
 | **3-UAV Offboard Takeoff, Waypoint (15/15), RTH & Land** | **Verified** | `scripts/thermoswarm_three_x500_v3.py --execute` |
 | **Post-Arm Climb Guard (`NO_CLIMB` Detection)** | **Verified** | Aborts if confirmed armed+Offboard vehicle climbs `< 0.5 m` in `10 s` |
 | **Offline Unit Test Suite (`unittest`)** | **Verified** | `scripts/test_thermoswarm_three_x500_v3.py` (isolated `ROS_DOMAIN_ID=87`) |
-| **Fleet YAML Configuration (`config/fleet.yaml`)** | **Schema Ready (Unwired)** | Present on disk as a design reference; **not yet parsed by flight scripts** |
+| **Fleet YAML Configuration (`config/fleet.yaml`)** | **Integrated in `thermoswarm_control`** | Validated at startup; package installs the canonical YAML as Python package data |
 | **Modular ROS 2 Packages (`thermoswarm_control`, `bringup`)** | **Planned** | Target architecture defined in `docs/ARCHITECTURE.md` |
 | **Wildfire World (`wildfire_world.sdf`) & Thermal Camera** | **Not Started (Planned)** | Scheduled for Milestone 2 (December 2026) |
 | **Thermal Hotspot Perception Node** | **Not Started (Planned)** | Scheduled for Milestone 2 (December 2026) |
@@ -107,7 +107,7 @@ flowchart TB
     end
 
     subgraph Planned["Planned Extensions (Nov 2026 – Jan 2027)"]
-        CFG["Declarative Config\n(config/fleet.yaml)\n[Schema Present, Unwired]"]
+        CFG["Declarative Config\n(config/fleet.yaml)\n[Loaded by thermoswarm_control]"]
         FIRE["Wildfire World & Thermal Sensor\n[Planned]"]
         PERC["Thermal Perception Node\n[Planned]"]
         BAG["rosbag2 Data Recorder\n[Planned]"]
@@ -143,7 +143,7 @@ thermal-swarm-sitl-poc/
 ├── requirements-dev.txt                          # Offline PX4 ULog analysis dependencies (pyulog, numpy)
 │
 ├── config/
-│   └── fleet.yaml                                # Design reference schema for 3-UAV parameters (NOT wired to flight code yet)
+│   └── fleet.yaml                                # Canonical fleet, route, and safety configuration
 │
 ├── docs/
 │   └── ARCHITECTURE.md                           # Target repository design, refactoring plan, and delivery roadmap
@@ -168,8 +168,7 @@ thermal-swarm-sitl-poc/
 └── .venv-logs/                                   # Isolated Python venv for offline .ulg log analysis
 ```
 
-> **Important Note on `config/fleet.yaml`:**
-> The file [`config/fleet.yaml`](config/fleet.yaml) defines the canonical parameters for `x500_1`, `x500_2`, and `x500_3` (`px4_instance`, `system_id`, `namespace`, `spawn_xy_m`, and `takeoff_altitude_m`). **It is currently a declarative design artifact and is not yet dynamically loaded by `scripts/thermoswarm_three_x500_v3.py`.** The flight script uses the exact same verified constants internally and will be wired to `config/fleet.yaml` during the upcoming package refactoring phase.
+> **Fleet configuration:** [`config/fleet.yaml`](config/fleet.yaml) is the single editable source for the three X500 vehicles, route offsets, and safety thresholds. The `thermoswarm_control` package validates it before creating the ROS node and includes it as package data. The retained v3 reference script is unchanged.
 
 ---
 
@@ -337,6 +336,6 @@ The development roadmap follows a staged, verification-first progression from mu
 | Phase / Target Date | Milestone | Key Deliverables | Status |
 | :--- | :--- | :--- | :--- |
 | **Milestone 0**<br>*(Oct 19–21, 2026)* | **Multi-UAV Offboard PoC & Fail-Closed Diagnostics** | • 3× X500 simultaneous Offboard flight (15/15 waypoints, RTH, land, disarm)<br>• Read-only Gazebo world collision detector (`GZ CHECK PASS`)<br>• Read-only 3/3 telemetry preflight audit (`AUDIT PASS`) via `./scripts/check.sh` | **Completed & Verified** |
-| **Milestone 1**<br>*(Nov 15, 2026)* | **Standardized Multi-UAV Bringup & Control Package** | • Refactor flight control into `ros2_ws/src/thermoswarm_control` & `thermoswarm_bringup`<br>• Wire `config/fleet.yaml` as the single source of truth for vehicle parameters<br>• Standardized `sim.sh` / `check.sh` / `demo.sh` operational workflow | **In Progress** |
+| **Milestone 1**<br>*(Nov 15, 2026)* | **Standardized Multi-UAV Bringup & Control Package** | • Refactor flight control into `ros2_ws/src/thermoswarm_control` & `thermoswarm_bringup`<br>• Wire `config/fleet.yaml` as the single source of truth for vehicle parameters<br>• Standardized `sim.sh` / `check.sh` / `demo.sh` operational workflow | **In Progress (fleet config integrated)** |
 | **Milestone 2**<br>*(Dec 15, 2026)* | **Wildfire Environment, Thermal Perception & Data Logging** | • Custom Gazebo wildfire world (`wildfire_world.sdf`) with thermal hotspots<br>• Thermal camera sensor integration on X500 models & `thermoswarm_perception` node<br>• Synchronized `rosbag2` recording (`thermoswarm_recording`) of pose, velocity, attitude, and thermal streams | **Planned** |
 | **Milestone 3**<br>*(Jan 5 – Jan 31, 2027)* | **End-to-End Digital Twin Demo & Latency Profiling** | • Inter-node ROS 2 communication latency monitoring (`thermoswarm_monitoring`)<br>• Target integrated system demonstration (Jan 5) and final technical evaluation (Jan 31) | **Planned** |

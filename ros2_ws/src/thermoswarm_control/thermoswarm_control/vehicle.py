@@ -2,12 +2,18 @@
 
 from dataclasses import dataclass, field
 
+from .config import load_config
+
 
 @dataclass
 class Aircraft:
     index: int
     sysid: int
     altitude_m: float
+    namespace: str = ''
+    px4_instance: int = 0
+    model: str = 'x500'
+    spawn_xy_m: tuple = (0.0, 0.0)
     position: object = None
     status: object = None
     land: object = None
@@ -29,6 +35,18 @@ class Aircraft:
     last_diag: float = 0.0
 
 
-def create_fleet():
-    """Return the three configured vehicles in index order."""
-    return [Aircraft(1, 2, 5.0), Aircraft(2, 3, 8.0), Aircraft(3, 4, 11.0)]
+def create_fleet(config=None):
+    """Build vehicle state from validated YAML, in configured PX4 instance order."""
+    config = config or load_config()
+    return [
+        Aircraft(
+            index=vehicle.px4_instance,
+            sysid=vehicle.system_id,
+            altitude_m=vehicle.takeoff_altitude_m,
+            namespace=vehicle.namespace,
+            px4_instance=vehicle.px4_instance,
+            model=vehicle.model,
+            spawn_xy_m=vehicle.spawn_xy_m,
+        )
+        for vehicle in config.vehicles
+    ]

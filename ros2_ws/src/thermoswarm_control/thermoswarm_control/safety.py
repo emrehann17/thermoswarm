@@ -17,15 +17,16 @@ def classify_climb(flight_s, max_climb_m, check_s=CLIMB_CHECK_S, min_climb_m=MIN
 class Safety:
     """Apply safety rules to a mission without owning its phase machine."""
 
-    def __init__(self, mission):
+    def __init__(self, mission, config=None):
         self.mission = mission
+        self.telemetry_freshness_s = getattr(config, 'telemetry_freshness_s', 2.0)
 
     def fresh(self, aircraft, now):
         return (
             aircraft.position is not None
             and aircraft.status is not None
-            and now - aircraft.position_at < 2.0
-            and now - aircraft.status_at < 2.0
+            and now - aircraft.position_at < self.telemetry_freshness_s
+            and now - aircraft.status_at < self.telemetry_freshness_s
         )
 
     def correct_sysid(self, aircraft):

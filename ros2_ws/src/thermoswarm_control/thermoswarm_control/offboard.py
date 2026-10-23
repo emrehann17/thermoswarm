@@ -44,7 +44,7 @@ class OffboardInterface:
             depth=1,
         )
         for vehicle in aircraft:
-            prefix = f'/px4_{vehicle.index}/fmu'
+            prefix = f'{vehicle.namespace}/fmu'
             self.publishers[vehicle.index] = {
                 'mode': node.create_publisher(
                     OffboardControlMode,
