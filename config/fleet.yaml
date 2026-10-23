@@ -1,12 +1,12 @@
-# ThermoSwarm fleet design reference (2026-10-21)
-# IMPORTANT: This file is NOT consumed by the current v3 flight script yet.
-# Keep the values aligned with the verified 2026-10-19 three-X500 SITL demonstration.
+# ThermoSwarm fleet configuration. The ROS package includes this canonical
+# source as thermoswarm_control/config/fleet.yaml package data.
 schema_version: 1
 vehicles:
   - name: x500_1
     px4_instance: 1
     system_id: 2
     namespace: /px4_1
+    model: x500
     spawn_xy_m: [0, 0]
     takeoff_altitude_m: 5
 
@@ -14,6 +14,7 @@ vehicles:
     px4_instance: 2
     system_id: 3
     namespace: /px4_2
+    model: x500
     spawn_xy_m: [5, 0]
     takeoff_altitude_m: 8
 
@@ -21,5 +22,29 @@ vehicles:
     px4_instance: 3
     system_id: 4
     namespace: /px4_3
+    model: x500
     spawn_xy_m: [10, 0]
     takeoff_altitude_m: 11
+
+# Offsets are local PX4 NED north/east metres, relative to the first observed
+# position. Altitude is held at the configured takeoff altitude at every leg.
+mission:
+  route:
+    - {name: KALKIS, north_m: 0, east_m: 0}
+    - {name: KUZEY_2M, north_m: 2, east_m: 0}
+    - {name: DOGU_2M, north_m: 2, east_m: 2}
+    - {name: GUNEY_2M, north_m: 0, east_m: 2}
+    - {name: EVE_DON, north_m: 0, east_m: 0}
+  safety:
+    telemetry_freshness_s: 2.0
+    audit_fresh_duration_s: 1.0
+    audit_timeout_s: 25.0
+    readiness_timeout_s: 90.0
+    offboard_warmup_heartbeats: 20
+    climb_check_s: 10.0
+    min_climb_m: 0.5
+    waypoint_xy_tolerance_m: 0.6
+    waypoint_z_tolerance_m: 0.5
+    waypoint_dwell_s: 1.5
+    leg_timeout_s: 40.0
+    mission_timeout_s: 180.0

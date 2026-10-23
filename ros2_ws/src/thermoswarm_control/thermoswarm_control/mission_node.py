@@ -9,16 +9,19 @@ from rclpy.node import Node
 
 from .mission import Mission
 from .offboard import OffboardInterface
+from .config import ConfigError, load_config
 
 
 class MissionNode(Node):
     """Compose mission policy with ROS 2 lifecycle and PX4 transport."""
 
-    def __init__(self, execute, isolate_failures=False):
+    def __init__(self, execute, isolate_failures=False, config=None):
         super().__init__('thermoswarm_three_x500_test')
         self.execute = execute
         self.isolate = isolate_failures
-        self.mission = Mission(execute, isolate_failures, logger=self.get_logger())
+        self.mission = Mission(
+            execute, isolate_failures, logger=self.get_logger(), config=config,
+        )
         self.mission.offboard = OffboardInterface(self, self.mission.aircraft)
         self.create_timer(0.1, self.mission.tick)
         self.get_logger().info(
@@ -34,6 +37,10 @@ def main(argv=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
+        '--config',
+        help='fleet YAML file (defaults to the installed thermoswarm_control config)',
+    )
+    parser.add_argument(
         '--execute', action='store_true',
         help='Gazebo SITL ortaminda uc arac icin otomatik ucusu etkinlestir',
     )
@@ -46,6 +53,11 @@ def main(argv=None):
         help='Ucus oncesi Gazebo dunya denetimini atla (onerilmez)',
     )
     args = parser.parse_args(argv)
+    try:
+        config = load_config(args.config)
+    except ConfigError as exc:
+        print(f'FLEET CONFIG ERROR: {exc}', file=sys.stderr)
+        return 2
     if args.execute and not args.skip_gz_check:
         from .thermoswarm_gz_world_check import check_world
 
@@ -59,7 +71,9 @@ def main(argv=None):
         print('GZ CHECK PASS.')
 
     rclpy.init()
-    node = MissionNode(execute=args.execute, isolate_failures=args.isolate_failures)
+    node = MissionNode(
+        execute=args.execute, isolate_failures=args.isolate_failures, config=config,
+    )
     try:
         while rclpy.ok() and node.mission.phase not in ('DONE', 'FAILED'):
             rclpy.spin_once(node, timeout_sec=0.2)
