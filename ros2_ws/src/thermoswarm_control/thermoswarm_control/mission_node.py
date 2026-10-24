@@ -35,6 +35,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        allow_abbrev=False,
     )
     parser.add_argument(
         '--config',

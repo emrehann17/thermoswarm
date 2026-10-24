@@ -1,0 +1,56 @@
+{
+  "transport": "ros",
+  "topic": "/thermoswarm/x500_1/thermal/image",
+  "frames_received": 421,
+  "arrival_hz": 7.9002277449191105,
+  "simulation_hz": 8.00304878048779,
+  "consecutive_hot_frames": 3,
+  "required_hot_frames": 3,
+  "min_arrival_hz": 1,
+  "require_airborne": true,
+  "thermal_check_pass": true,
+  "hotspot_detected_pass": true,
+  "source": "live ROS sensor subscription; no synthetic image",
+  "recorded_utc": "2026-10-24T09:43:06.120795+00:00",
+  "ros_domain_id": "0",
+  "flight_at_image_receipt": {
+    "telemetry_fresh": true,
+    "airborne_verified": true,
+    "system_id": 2,
+    "armed": true,
+    "landed": false,
+    "local_altitude_m": 1.0597494840621948,
+    "telemetry_age_s": {
+      "position": 0.010948621998977615,
+      "status": 0.004168906998529565,
+      "land": 0.027225615998759167
+    }
+  },
+  "width": 320,
+  "height": 240,
+  "encoding": "mono8",
+  "step": 320,
+  "stamp": 498.5,
+  "frame_id": "x500_1/thermal_camera_optical",
+  "min_gray": 100,
+  "max_gray": 200,
+  "contrast_gray": 100,
+  "temperature_range_K_approx": [
+    300,
+    600
+  ],
+  "hot_pixels": 6370,
+  "hot_fraction": 0.08294270833333334,
+  "ambient_pixels": 70430,
+  "hot_centroid_px": [
+    48.5,
+    32.0
+  ],
+  "hot_visible": true,
+  "image_age_s": 0.020576370001435862,
+  "pass": true,
+  "reason": "consecutive real hot frames accepted",
+  "image_file": "hotspot.png",
+  "image_sha256": "8133507df06fbec9ec95a37e7e2fdaf4254f80de04617af69da570ef2fc5ade8",
+  "pixel_sha256": "f0bb93192d7c2762fdc8bd2b6059fd95a038c678eca9d924bbc390c1e0250b10"
+}

@@ -1,0 +1,8 @@
+# Only genuine Gazebo image messages cross this one-way bridge.
+- ros_topic_name: /thermoswarm/x500_1/thermal/image
+  gz_topic_name: /thermoswarm/x500_1/thermal/image
+  ros_type_name: sensor_msgs/msg/Image
+  gz_type_name: gz.msgs.Image
+  direction: GZ_TO_ROS
+  lazy: false
+  qos_profile: SENSOR_DATA

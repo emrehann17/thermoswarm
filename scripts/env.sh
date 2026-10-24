@@ -25,6 +25,7 @@ _thermoswarm_env() {
             export PATH="$root/.runtime/setup/bin:$PATH"
         fi
         export GZ_DISTRO=harmonic
+        export GZ_CONFIG_PATH="/usr/share/gz${GZ_CONFIG_PATH:+:$GZ_CONFIG_PATH}"
         export GZ_IP="${GZ_IP:-127.0.0.1}"
         export LANG="${LANG:-C.UTF-8}"
     fi

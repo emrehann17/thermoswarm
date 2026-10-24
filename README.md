@@ -2,7 +2,7 @@
 
 **ThermoSwarm** is a Software-in-the-Loop (SITL) research and verification platform designed to simulate coordinated multi-UAV operations over wildfire environments using **ROS 2 Jazzy**, **PX4 Autopilot v1.17.0**, **Gazebo Harmonic**, and **Micro XRCE-DDS**.
 
-> **Project Status (October 2026):** The multi-UAV flight control and pre-flight verification foundation is **operational and verified** (3× X500 autonomous Offboard takeoff, 15/15 waypoint navigation, return-to-home, landing, and disarm). Thermal camera perception, wildfire world modeling, `rosbag2` data logging, and inter-node latency benchmarking are **in the planned architecture phase** and have not yet been implemented.
+> **Project Status (October 2026):** The multi-UAV flight control and pre-flight verification foundation is **operational and verified** (3× X500 autonomous Offboard takeoff, 15/15 waypoint navigation, return-to-home, landing, and disarm). Phase 6 adds a minimal wildfire world and an X500-1 thermal image stream (Gazebo + ROS 2). Real rendering, image contrast, stationary three-UAV AUDIT and safe lifecycle checks are documented in [Phase 6](docs/PHASE6_VALIDATION.md). A wildfire waypoint flight has not been run in this phase. AI thermal perception, `rosbag2` logging and latency benchmarking remain planned.
 
 ---
 
@@ -77,7 +77,7 @@ To maintain strict academic and engineering transparency, ThermoSwarm distinguis
 | **Offline Unit Test Suite (`unittest`)** | **Verified** | `scripts/test_thermoswarm_three_x500_v3.py` (isolated `ROS_DOMAIN_ID=87`) |
 | **Fleet YAML Configuration (`config/fleet.yaml`)** | **Integrated in `thermoswarm_control`** | Validated at startup; package installs the canonical YAML as Python package data |
 | **Modular ROS 2 Packages (`thermoswarm_control`, `bringup`)** | **Planned** | Target architecture defined in `docs/ARCHITECTURE.md` |
-| **Wildfire World (`wildfire_world.sdf`) & Thermal Camera** | **Not Started (Planned)** | Scheduled for Milestone 2 (December 2026) |
+| **Wildfire World & X500-1 Thermal Camera** | **Minimal real sensor integration** | `sim.sh start --world wildfire`; [evidence and limits](docs/PHASE6_VALIDATION.md) |
 | **Thermal Hotspot Perception Node** | **Not Started (Planned)** | Scheduled for Milestone 2 (December 2026) |
 | **Multi-UAV `rosbag2` Telemetry & Sensor Recording** | **Not Started (Planned)** | Scheduled for Milestone 2 (December 2026) |
 | **Inter-Node ROS 2 Message Latency Benchmarking** | **Not Started (Planned)** | Scheduled for Milestone 3 (January 2027) |
@@ -262,7 +262,7 @@ python3 -B -m unittest discover -s scripts -p test_setup.py -v
 ./scripts/setup.sh --check
 ```
 
-**Not yet verified:** a full installation on clean Ubuntu/WSL2, package downloads, the newly isolated PX4/Agent build route, and the complete live `sim.sh start → check → stop` lifecycle. Historical manual three-UAV flight evidence does not establish these newer workflows.
+**Not yet verified:** a full installation on clean Ubuntu/WSL2, package downloads and the newly isolated PX4/Agent build route. Phase 6 later verified the stationary live default/wildfire `sim.sh start → check → stop` lifecycle; a wildfire waypoint flight still requires user acceptance.
 
 Upstream references: [PX4 v1.17 Ubuntu setup](https://docs.px4.io/v1.17/en/dev_setup/dev_env_linux_ubuntu), [PX4 ROS 2 guide](https://docs.px4.io/v1.17/en/ros2/user_guide), [ROS Jazzy apt installation](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), [Gazebo Harmonic installation](https://gazebosim.org/docs/harmonic/install_ubuntu/), [ROS apt-source 1.3.0](https://github.com/ros-infrastructure/ros-apt-source/releases/tag/1.3.0).
 
@@ -270,7 +270,7 @@ Upstream references: [PX4 v1.17 Ubuntu setup](https://docs.px4.io/v1.17/en/dev_s
 
 ## 7. Simulation Lifecycle
 
-`scripts/sim.sh` is the Phase 4 launcher for the three-X500 PX4 SITL and Gazebo Harmonic stack. Its offline tests and dry-run integration have been checked; its live start/check/stop lifecycle has not yet been validated on this machine. It reads `config/fleet.yaml` through the `thermoswarm_control` Python config loader and accepts only the validated three-X500 layout. `start` sends no arm, mode, or flight command.
+`scripts/sim.sh` is the Phase 4 launcher for the three-X500 PX4 SITL and Gazebo Harmonic stack. The user has verified the default-world three-UAV waypoint flight through this launcher. Phase 6 additionally exercises stationary start/AUDIT/stop and the thermal stream; its wildfire waypoint flight remains a separate user acceptance step. It reads `config/fleet.yaml` through the `thermoswarm_control` Python config loader and accepts only the validated three-X500 layout. `start` sends no arm, mode, or flight command.
 
 ### Prerequisites
 
@@ -371,3 +371,111 @@ The development roadmap follows a staged, verification-first progression from mu
 | **Milestone 1**<br>*(Nov 15, 2026)* | **Standardized Multi-UAV Bringup & Control Package** | • Refactor flight control into `ros2_ws/src/thermoswarm_control` & `thermoswarm_bringup`<br>• Wire `config/fleet.yaml` as the single source of truth for vehicle parameters<br>• Standardized `sim.sh` / `check.sh` / `demo.sh` operational workflow | **In Progress (fleet config integrated)** |
 | **Milestone 2**<br>*(Dec 15, 2026)* | **Wildfire Environment, Thermal Perception & Data Logging** | • Custom Gazebo wildfire world (`wildfire_world.sdf`) with thermal hotspots<br>• Thermal camera sensor integration on X500 models & `thermoswarm_perception` node<br>• Synchronized `rosbag2` recording (`thermoswarm_recording`) of pose, velocity, attitude, and thermal streams | **Planned** |
 | **Milestone 3**<br>*(Jan 5 – Jan 31, 2027)* | **End-to-End Digital Twin Demo & Latency Profiling** | • Inter-node ROS 2 communication latency monitoring (`thermoswarm_monitoring`)<br>• Target integrated system demonstration (Jan 5) and final technical evaluation (Jan 31) | **Planned** |
+
+
+## 11. Phase 6: minimal wildfire world and UAV thermal camera
+
+The optional scenario has a flat 60 m ground, six primitive trees away from all three 2 m square routes, a visual-only **600 K** patch at `(1, 1)` and **300 K** ground/reference surfaces. Temperatures are fixed simulation parameters, with no fire spread, smoke physics or detection AI. Actual `gz-sim-thermal-system` plugins assign surface temperatures.
+
+`wildfire_assets.py` expands the installed PX4 v1.17 X500, then adds only a downward thermal sensor inside its existing `base_link`. The full model is generated under `.runtime/wildfire/models/x500_thermal/`; upstream PX4 files, mass, inertia, collisions, motors, IMU, GPS and flight control remain intact. The world uses the original entity names `x500_1`, `x500_2`, `x500_3`. The launcher owns the wildfire Gazebo process and attaches PX4 using `PX4_GZ_STANDALONE=1`, `PX4_GZ_WORLD=thermoswarm_wildfire`, and `PX4_GZ_MODEL_NAME=x500_N`. The default world retains its PX4-managed spawn path.
+
+The camera is 320×240, L8, 8 Hz, 90° horizontal FOV, mounted 0.12 m below `base_link` with +90° pitch. At the 5 m flight level, the complete 1.2 m hot patch remains inside the approximately 10×7.5 m footprint throughout X500-1's square route. Flight attitude may change the footprint; geometric coverage is not a completed flight test.
+
+Both transports use `/thermoswarm/x500_1/thermal/image`: Gazebo `gz.msgs.Image` / `L_INT8` → one-way `ros_gz_bridge` → ROS `sensor_msgs/msg/Image` / `mono8`, with frame ID `x500_1/thermal_camera_optical`. Message timestamps are simulation timestamps. Pixel × 3 gives approximate kelvin for this specific sensor configuration; it is not radiometric hardware calibration. No ROS clock bridge, TF broadcaster or rosbag recording is introduced here.
+
+### Dependencies and launch
+
+`setup.sh --plan` now explicitly includes `ros-jazzy-ros-gz-bridge`, `python3-gz-transport13` and `python3-gz-msgs10`. On the reference machine, the Gazebo Python packages were already present; the user approved and installed the bridge plus its 11 dependencies. No package upgrade was requested. On another machine, inspect the setup plan and use the existing `--install --allow-system` consent flow.
+
+```bash
+cd ~/projects/thermal-swarm-sitl-poc
+source scripts/env.sh
+./scripts/setup.sh --plan
+./scripts/setup.sh --check
+./scripts/sim.sh start --world wildfire --dry-run
+./scripts/sim.sh start --world wildfire
+./scripts/sim.sh status
+./scripts/sim.sh check
+
+# Verify the real sensor's parent and both real image streams:
+gz model -m x500_1 -l base_link -s thermal_camera
+python3 scripts/thermal_check.py --transport gz --frames 16
+python3 scripts/thermal_check.py --transport ros --frames 16 --output artifacts/phase6/ground.png
+ros2 topic hz /thermoswarm/x500_1/thermal/image
+# Ctrl-C ends only the rate monitor.
+```
+
+A grounded downward camera sees the ground immediately below it, so the above stream check does **not** require the fire patch to be visible. To view the stream in Gazebo, run `gz gui -s ImageDisplay` and choose `/thermoswarm/x500_1/thermal/image`. This GUI requires WSLg/X11 and was not used for the automated headless test. The server uses OGRE2 + EGL by default; `start --world wildfire --render-mode x11` is an explicit alternative if EGL fails on another GPU/driver. No placeholder images are produced.
+
+### Genuine contrast evidence without starting a flight
+
+```bash
+source scripts/env.sh
+python3 scripts/thermal_render_test.py --output artifacts/phase6/optics
+```
+
+This launches a separate real Gazebo partition and a ROS bridge in domain 88. It holds the same X500 model **static at z=5 m**, captures real images, translates that static model by 2 m, verifies that the hot-region centroid moves, and shuts down its own processes. It starts **no PX4 and no flight**. This optical test does not establish mission performance.
+
+Real ROS image from that test (raw grayscale, no recoloring):
+
+![Real Gazebo thermal image bridged to ROS; static X500 at z=5 m](docs/evidence/phase6/elevated-ros.png)
+
+The recorded image contains 1,369 hot pixels, gray values 100 / 200 (approximately 300 / 600 K), and 100 levels of contrast. Gazebo and ROS arrival rates were approximately 8 Hz. Moving the static X500 shifted the hot centroid by 63 pixels. [Full recorded metrics](docs/evidence/phase6/render-test.json).
+
+### User-run wildfire flight acceptance
+
+After `sim.sh check` reports `GZ CHECK PASS` and `AUDIT PASS 3/3`, the user can separately run the ROS mission:
+
+```bash
+# Terminal A, sourced with scripts/env.sh:
+ros2 run thermoswarm_control thermoswarm_three_x500_node --execute
+```
+
+Once X500-1 has climbed, capture the actual in-flight sensor image from a second sourced terminal:
+
+```bash
+python3 scripts/thermal_check.py --transport ros --frames 32 --require-hot --min-hz 1 \
+  --output artifacts/phase6/in-flight-thermal.png
+# After all three aircraft land and disarm:
+./scripts/sim.sh stop
+./scripts/sim.sh status
+```
+
+Expected full mission evidence is 15/15 waypoints plus 3/3 landing/disarm. Initial development tests did not start a flight. A later **user-started flight** now has genuine airborne hotspot evidence: see [hotspot acceptance](docs/PHASE6_HOTSPOT_ACCEPTANCE.md). That image check does not certify all 15 waypoints. `./scripts/sim.sh start` continues to select the default world. Initial results, fixes and unverified items are in [PHASE6_VALIDATION.md](docs/PHASE6_VALIDATION.md).
+
+### Live hotspot acceptance during a user-started flight
+
+At rest, the downward camera sees only about 20×15 cm of ground. The hot patch at `(1,1)` is outside that footprint: `min=max=100` is expected. With a level vehicle, the complete patch enters the view after approximately 2.1 m of climb; the existing 5 m flight altitude is sufficient. No SDF or render change was needed.
+
+Before starting the mission, run this **read-only subscriber** in another sourced terminal:
+
+```bash
+python3 -u scripts/thermal_watch.py --require-airborne --timeout 300 --interval 2 \
+  --output "artifacts/phase6/flight-$(date -u +%Y%m%dT%H%M%SZ)"
+```
+
+After `WATCH READY`, start the ROS mission yourself in the flight terminal using `--execute`. The monitor reports live metrics and saves the actual `hotspot.png` plus JSON on three consecutive qualifying frames with fresh airborne telemetry. It never commands a flight. Each run requires a new output directory. The monitor exits after success; the mission continues normally.
+
+`THERMAL CHECK PASS` validates the stream. Final hotspot acceptance requires **`HOTSPOT DETECTED PASS` and `hot_visible=true`**, plus the genuine saved PNG and JSON. `thermal_check.py --require-hot` likewise exits nonzero when the stream works but the hotspot is absent; launcher startup remains a stream-only test.
+
+The user-started flight recorded **100/200 gray values, 6,370 hot pixels, 7.90 Hz**, and fresh SYSID 2 ARMED/AIRBORNE telemetry at about 1.06 m local altitude. [Actual flight PNG](docs/evidence/phase6-flight/hotspot.png) · [metrics](docs/evidence/phase6-flight/result.json) · [geometry, exact commands and acceptance criteria](docs/PHASE6_HOTSPOT_ACCEPTANCE.md).
+
+### Wildfire preflight safety fix
+
+The launcher, `sim.sh check`, direct `check.sh`, and ROS `--execute` preflight now share the ROS package's world checker. Automatic selection reads the running Gazebo world name; explicit launcher selections must agree. Unknown or ambiguous worlds fail closed. Wildfire requires all eight static decor models in addition to the ground and the original three X500s. Extra, duplicate or missing models fail.
+
+Only the two static, collision-free thermal patches are exempted, after checking the **running world's expanded SDF**. A failed export, added collision or changed thermal surface fails the check. Trees remain physical obstacles: their horizontal collision extent is added to the unchanged 1.5 m clearance. The SDF already defines both patches without collisions, so no world geometry or temperature change was needed.
+
+After updating source, rebuild the installed package before using its CLI:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source ros2_ws/install/local_setup.bash
+(cd ros2_ws && colcon build --packages-select thermoswarm_control --symlink-install)
+source scripts/env.sh
+./scripts/sim.sh check
+python3 -m thermoswarm_control.thermoswarm_gz_world_check
+ros2 run thermoswarm_control thermoswarm_three_x500_node  # read-only AUDIT
+```
+
+`--executete` is an error (exit 2); the valid spelling is `--execute`. Rebuilding and the checks above do not start a flight. Detailed scope, live/offline results and commands: [Phase 6 safety fix](docs/PHASE6_SAFETY_FIX.md).

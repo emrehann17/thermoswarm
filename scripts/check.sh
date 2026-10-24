@@ -9,6 +9,12 @@ cd "$PROJECT_ROOT"
 log() { printf '[thermoswarm-check] %s\n' "$*"; }
 fail() { printf '[thermoswarm-check] FAIL: %s\n' "$*" >&2; exit 1; }
 
+WORLD=auto
+if (( $# )); then
+  [[ $# == 2 && $1 == --world && ( $2 == auto || $2 == default || $2 == wildfire ) ]] || fail 'Kullanım: check.sh [--world auto|default|wildfire]'
+  WORLD="$2"
+fi
+
 [[ -f scripts/thermoswarm_gz_world_check.py ]] || fail 'Gazebo denetim betiği bulunamadı.'
 [[ -f scripts/thermoswarm_three_x500_v3.py ]] || fail 'Uçuş denetim betiği bulunamadı.'
 [[ -f /opt/ros/jazzy/setup.bash ]] || fail 'ROS 2 Jazzy setup bulunamadı.'
@@ -20,6 +26,7 @@ source /opt/ros/jazzy/setup.bash
 # shellcheck source=/dev/null
 source ros2_ws/install/setup.bash
 export GZ_IP="${GZ_IP:-127.0.0.1}"
+export GZ_CONFIG_PATH="/usr/share/gz${GZ_CONFIG_PATH:+:$GZ_CONFIG_PATH}"
 
 PYTHON_BIN="${THERMOSWARM_PYTHON:-python3}"
 command -v "$PYTHON_BIN" >/dev/null 2>&1 || fail "Python bulunamadı: $PYTHON_BIN"
@@ -29,7 +36,7 @@ tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
 
 log '1/2: Gazebo model ve çakışma denetimi (salt-okunur)'
-if ! timeout 60s "$PYTHON_BIN" scripts/thermoswarm_gz_world_check.py 2>&1 | tee "$tmp_file"; then
+if ! timeout 60s "$PYTHON_BIN" scripts/thermoswarm_gz_world_check.py --world "$WORLD" 2>&1 | tee "$tmp_file"; then
   fail 'Gazebo denetim komutu hata verdi veya 60 saniyede bitmedi.'
 fi
 if ! grep -q 'GZ CHECK PASS' "$tmp_file" || grep -q 'GZ CHECK FAIL' "$tmp_file"; then
