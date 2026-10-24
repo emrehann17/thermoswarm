@@ -14,7 +14,7 @@
 4. [System Architecture](#4-system-architecture)
 5. [Repository Structure and Component Responsibilities](#5-repository-structure-and-component-responsibilities)
 6. [Environment Setup and ROS 2 Workspace Preparation](#6-environment-setup-and-ros-2-workspace-preparation)
-7. [Launching the Three-UAV SITL Environment](#7-launching-the-three-uav-sitl-environment)
+7. [Simulation Lifecycle](#7-simulation-lifecycle)
 8. [Read-Only System Verification (`./scripts/check.sh`) and Flight Execution](#8-read-only-system-verification-scriptschecksh-and-flight-execution)
 9. [Architecture Reference](#9-architecture-reference)
 10. [Roadmap and Delivery Milestones](#10-roadmap-and-delivery-milestones)
@@ -174,101 +174,131 @@ thermal-swarm-sitl-poc/
 
 ## 6. Environment Setup and ROS 2 Workspace Preparation
 
-### 6.1 Python and ROS 2 Runtime Architecture
+### 6.1 First installation on Ubuntu 24.04 / WSL2
 
-All flight and diagnostic scripts in `scripts/*.py` rely exclusively on:
-1. **Python 3.12 Standard Library** (`argparse`, `dataclasses`, `math`, `os`, `re`, `subprocess`, `sys`, `time`, `types`, `unittest`),
-2. **System ROS 2 Jazzy Python Packages** (`rclpy` located at `/opt/ros/jazzy/lib/python3.12/site-packages`),
-3. **Compiled `px4_msgs` Package** (`ros2_ws/install/px4_msgs/lib/python3.12/site-packages`).
+Use an Ubuntu **24.04** WSL2 distribution (or native Ubuntu 24.04), a normal user with sudo access, internet access, and sufficient disk/RAM for PX4, Gazebo and C++ builds. Keep the checkout in the Linux filesystem (`~/projects`, not `/mnt/c`). The default build parallelism is two jobs; lower it with `--jobs 1` if WSL runs out of memory. The script supports amd64 and arm64; only the existing amd64 WSL2 environment has been checked.
 
-**Zero external `pip` packages are required at flight runtime.** Sourcing the ROS 2 setup files allows the system `/usr/bin/python3` interpreter to execute all flight and diagnostic scripts directly.
-
-To keep development, IDE static analysis, and offline log processing cleanly separated, two virtual environments are used:
-
-| Environment | Creation Command | Purpose |
-| :--- | :--- | :--- |
-| `.venv-ros` | `python3 -m venv --system-site-packages .venv-ros` | ROS 2 runtime & VS Code Pylance integration. Inherits system ROS packages via `--system-site-packages`; never install `rclpy` or `px4_msgs` via `pip`. |
-| `.venv-logs` | `python3 -m venv .venv-logs` | Offline analysis of PX4 `.ulg` (ULog) flight logs using `pyulog` and `numpy` (`requirements-dev.txt`). Strictly isolated from ROS 2 runtime. |
-
-> **Note on VS Code Pylance (`Import "rclpy.node" could not be resolved`):**
-> This warning occurs when VS Code has not sourced `/opt/ros/jazzy/setup.bash` and `ros2_ws/install/setup.bash`. Configuring `python.defaultInterpreterPath` and `python.analysis.extraPaths` in `.vscode/settings.json` allows Pylance to resolve `rclpy`, `px4_msgs`, and `scripts/` modules directly.
-
-### 6.2 Building `ros2_ws` (First-Time or After Clean)
-
-If `ros2_ws/install/setup.bash` has not been built yet:
+If Git is missing, explicitly install this bootstrap prerequisite in your terminal (`sudo apt update`, then `sudo apt install git`; review apt's proposed changes). Then:
 
 ```bash
-cd ~/projects/thermal-swarm-sitl-poc/ros2_ws
-source /opt/ros/jazzy/setup.bash
-colcon build --packages-select px4_msgs
+mkdir -p ~/projects
+cd ~/projects
+git clone --branch refactor/ros2-architecture https://github.com/emrehann17/thermoswarm.git thermal-swarm-sitl-poc
+cd thermal-swarm-sitl-poc
+./scripts/setup.sh --help
+./scripts/setup.sh                 # read-only plan; no downloads, sudo or builds
+./scripts/setup.sh --install --allow-system
 ```
 
-### 6.3 Sourcing the Workspace in a New Terminal
+**Delivery status:** Phase 5 files are currently local and uncommitted. The clone instructions include Phase 5 only after these files are separately reviewed and published to this branch. This phase does not commit or push anything.
 
-Before running any ROS 2 script in a new shell session:
+`--install` asks for local-change consent after displaying the plan. `--allow-system` explicitly permits sudo, repository additions and installation of missing apt packages. Each apt transaction is first simulated, displayed, and then requires apt's own confirmation. An upgrade, downgrade or removal of an already installed package stops the installer; resolve it deliberately in your terminal and rerun. No automatic full upgrade is performed. Repository changes may enable Universe and install the pinned ROS apt-source package / OSRF keyring; existing repository files are preserved. An existing but unusable ROS/OSRF source must be repaired manually.
+
+For an already provisioned host, stop any active simulation yourself, inspect the plan, and use:
+
+```bash
+./scripts/setup.sh --install       # local changes only; missing apt prerequisites cause a stop
+# Optional explicit consent to local changes, after reviewing the plan:
+./scripts/setup.sh --install --yes
+```
+
+Never run `sudo ./scripts/setup.sh`. `--yes` does not enable system operations or approve apt transactions. The installer never starts PX4, Gazebo, a DDS server, a ROS node or a flight, and never changes `.bashrc`.
+
+### 6.2 Versions, preservation and repeat runs
+
+[`scripts/setup-versions.env`](scripts/setup-versions.env) pins PX4 **v1.17.0**, `px4_msgs` **v1.17.0** (the verified `release/1.17` revision), Agent **v2.4.3**, Fast-CDR **2.2.8**, Fast-DDS **2.14.7**, foonathan memory **v0.7-3**, and spdlog **v1.9.2** by full commit ID. Git submodules use their parent commit's recorded revisions. Existing checkouts are never pulled, switched, reset or cleaned. Wrong revisions, local source modifications, untracked source files, or incomplete submodules stop installation without changing that checkout. Ignored PX4 runtime configuration and parameters are retained.
+
+ROS is fixed to **Jazzy**, Gazebo to **Harmonic / gz-sim 8**. Apt patch versions follow the enabled Noble repositories; this is a repeatable source/version-family setup, **not a byte-identical or offline apt snapshot**. Installed package versions are retained. PX4 Python constraints are recorded from the working machine in [`scripts/requirements-px4-constraints.txt`](scripts/requirements-px4-constraints.txt); fresh PyPI availability and the complete transitive resolution still require a clean-install test. The resolved build venv versions are recorded in `.runtime/setup/px4-python-resolved.txt`.
+
+| Component | Installation / rerun behavior |
+| :--- | :--- |
+| PX4 SITL | Build-only `make px4_sitl_default`; an existing executable is kept. Any existing partial build directory is preserved and requires manual inspection. No PX4 parameter changes. |
+| Agent | Keep an existing executable whose resolved Agent library is `2.4.3`. An incompatible/unverifiable executable blocks installation. New builds use `.runtime/setup/agent/install`, without sudo or `ldconfig`. |
+| Agent dependencies | Separate pinned builds; the upstream moving-branch superbuild is disabled. P2P client support is disabled; the required UDP4 DDS bridge remains enabled. Agent library paths are scoped to its wrapper process, not exported into ROS. |
+| ROS workspace | Build only `px4_msgs` and `thermoswarm_control` under `ros2_ws`, using system Python 3.12 and symlink installation. A source/config fingerprint and installed-resource checks skip unchanged successful builds. Existing workspaces are rebuilt once to establish the fingerprint. |
+| Failed runs | Completed components can be reused. Partial/unverifiable checkouts, an unmanaged/changed PX4 venv, or a partial PX4 build directory are left for inspection, never deleted automatically. Repair them deliberately before rerunning. |
+
+The installer does not invoke PX4's upstream `Tools/setup/ubuntu.sh`, which writes Python dependencies into the system interpreter. It uses:
+
+| Python environment | Purpose |
+| :--- | :--- |
+| `.venv-ros` (`--system-site-packages`) | ROS runtime, system `rclpy`, apt `python3-yaml`, and workspace message packages. Existing compatible venvs are kept. No `pip` installation of `rclpy` or `px4_msgs`. |
+| `.venv-px4` (isolated) | PX4 build dependencies only, installed using the pinned PX4 requirements and recorded constraints. Created only when PX4 needs building. |
+| `.venv-logs` (optional, separate) | Offline ULog analysis; outside the setup script's scope. Use `python3 -m venv .venv-logs`, then `.venv-logs/bin/python -m pip install -r requirements-dev.txt`. |
+
+### 6.3 Source and verify in each new terminal
 
 ```bash
 cd ~/projects/thermal-swarm-sitl-poc
-
-# 1. Source ROS 2 Jazzy and the local px4_msgs workspace:
-source /opt/ros/jazzy/setup.bash
-source ros2_ws/install/setup.bash
-
-# 2. (Optional) Activate the .venv-ros virtual environment:
-source .venv-ros/bin/activate
+source scripts/env.sh
+./scripts/setup.sh --check
+ros2 pkg prefix px4_msgs
+ros2 pkg prefix thermoswarm_control
+cat "$(ros2 pkg prefix thermoswarm_control)/share/thermoswarm_control/config/fleet.yaml"
 ```
 
-### 6.4 Offline ULog Analysis Environment (`.venv-logs`)
+`env.sh` sources `/opt/ros/jazzy/setup.bash`, the local `ros2_ws` overlay and `.venv-ros`, and puts a locally built Agent wrapper on `PATH`. It leaves shell startup files untouched. `--check` independently sources the installed overlay, checks CLI/library/binary availability and source pins, imports both ROS packages, and validates `fleet.yaml` **from the installed package share directory** against the canonical config. It neither contacts a running simulation nor proves flight readiness. It returns nonzero for missing or mismatched components.
 
-To inspect PX4 `.ulg` logs independently of the ROS 2 runtime:
+To deliberately rebuild changed ROS sources/config yourself:
 
 ```bash
-cd ~/projects/thermal-swarm-sitl-poc
-source .venv-logs/bin/activate
-# If installing for the first time: pip install -r requirements-dev.txt
-ulog_messages PX4-Autopilot/build/px4_sitl_default/rootfs/1/log/<date>/<logfile>.ulg
+source scripts/env.sh
+cd ros2_ws
+/usr/bin/python3 -m colcon build --base-paths src/px4_msgs src/thermoswarm_control \
+  --packages-select px4_msgs thermoswarm_control --symlink-install --executor sequential
+cd ..
+source scripts/env.sh
+./scripts/setup.sh --check
 ```
+
+### 6.4 Verification status and setup tests
+
+The existing Ubuntu 24.04 WSL2 machine passes the read-only stack checks, including the installed `fleet.yaml`. A separate temporary workspace also completed a real build of both ROS packages; a second installer run skipped rebuilding successfully. Offline installer tests cover missing dependencies, permission gates, apt upgrades/removals, source preservation, partial builds and repeated execution. See [`docs/PHASE5_VALIDATION.md`](docs/PHASE5_VALIDATION.md) for the exact results and remaining acceptance work.
+
+```bash
+bash -n scripts/setup.sh scripts/env.sh scripts/sim.sh
+shellcheck scripts/setup.sh scripts/env.sh scripts/sim.sh
+python3 -B -m unittest discover -s scripts -p test_setup.py -v
+./scripts/setup.sh --check
+```
+
+**Not yet verified:** a full installation on clean Ubuntu/WSL2, package downloads, the newly isolated PX4/Agent build route, and the complete live `sim.sh start → check → stop` lifecycle. Historical manual three-UAV flight evidence does not establish these newer workflows.
+
+Upstream references: [PX4 v1.17 Ubuntu setup](https://docs.px4.io/v1.17/en/dev_setup/dev_env_linux_ubuntu), [PX4 ROS 2 guide](https://docs.px4.io/v1.17/en/ros2/user_guide), [ROS Jazzy apt installation](https://docs.ros.org/en/jazzy/Installation/Ubuntu-Install-Debs.html), [Gazebo Harmonic installation](https://gazebosim.org/docs/harmonic/install_ubuntu/), [ROS apt-source 1.3.0](https://github.com/ros-infrastructure/ros-apt-source/releases/tag/1.3.0).
 
 ---
 
-## 7. Launching the Three-UAV SITL Environment
+## 7. Simulation Lifecycle
 
-Running the complete three-vehicle simulation requires **Micro XRCE-DDS Agent** and **three PX4 SITL instances** connected to a single Gazebo Harmonic world.
+`scripts/sim.sh` is the Phase 4 launcher for the three-X500 PX4 SITL and Gazebo Harmonic stack. Its offline tests and dry-run integration have been checked; its live start/check/stop lifecycle has not yet been validated on this machine. It reads `config/fleet.yaml` through the `thermoswarm_control` Python config loader and accepts only the validated three-X500 layout. `start` sends no arm, mode, or flight command.
 
-### Step 1: Start the Micro XRCE-DDS Agent (Mandatory)
+### Prerequisites
 
-> **Critical Requirement:** The **Micro XRCE-DDS Agent** must be running continuously before and during any ROS 2 audit or flight session. Without the agent, PX4 uORB topics cannot bridge to ROS 2 DDS topics, and all telemetry checks will fail.
+Use the verified Ubuntu 24.04 / WSL2 environment with ROS 2 Jazzy, PX4 SITL v1.17.0, Gazebo Harmonic, Micro XRCE-DDS Agent, and a built `ros2_ws/install` workspace. The PX4 binary must exist at `PX4-Autopilot/build/px4_sitl_default/bin/px4`. Stop any manually started PX4 or Gazebo session before using `start`; the launcher detects conflicts and leaves those processes untouched.
 
-In **Terminal 1**:
+### Commands
 
 ```bash
-MicroXRCEAgent udp4 -p 8888
+source scripts/env.sh
+./scripts/setup.sh --check
+./scripts/sim.sh --help
+./scripts/sim.sh start --dry-run
+./scripts/sim.sh start
+./scripts/sim.sh status
+./scripts/sim.sh check
+./scripts/sim.sh logs --tail 40
+./scripts/sim.sh stop
 ```
 
-### Step 2: Launch the Three PX4 SITL + Gazebo Harmonic Instances
+`start` launches the DDS Agent, PX4 instance 1 (which starts Gazebo), then instances 2 and 3 in standalone mode. It waits for UDP/8888, each Gazebo model, the exact expected world model set, and the three ROS 2 local-position topics, with bounded readiness timeouts. `status` only reads the saved process manifest. `check` runs the existing read-only `scripts/check.sh`. `logs` prints log paths, or tails them with `--tail N`.
 
-Open three separate terminals. In each terminal, navigate to `PX4-Autopilot` and export `GZ_IP=127.0.0.1`:
+Runtime state and logs are stored under the Git-ignored `.runtime/sim/` directory (`state.json`, `dds-agent.log`, and `px4-1.log` through `px4-3.log`). `start --dry-run` validates the fleet and prints the planned commands without starting processes.
 
-- **Terminal 2 — Instance 1 (`x500_1`, `sysid=2`, `/px4_1`, spawns Gazebo server at `0, 0`):**
-  ```bash
-  cd ~/projects/thermal-swarm-sitl-poc/PX4-Autopilot
-  export GZ_IP=127.0.0.1
-  HEADLESS=1 PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="0,0" ./build/px4_sitl_default/bin/px4 -i 1
-  ```
+`stop` checks that all three vehicles report disarmed and landed. If telemetry is missing, a vehicle is armed/in flight, or ownership cannot be confirmed, it refuses to shut the simulation down. For owned processes, it verifies PID start time, process group, and command identity, then sends SIGINT followed by bounded SIGTERM/SIGKILL escalation only to the launcher's isolated process groups. Repeating `stop` is safe.
 
-- **Terminal 3 — Instance 2 (`x500_2`, `sysid=3`, `/px4_2`, attaches to existing Gazebo server at `5, 0`):**
-  ```bash
-  cd ~/projects/thermal-swarm-sitl-poc/PX4-Autopilot
-  export GZ_IP=127.0.0.1
-  HEADLESS=1 PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="5,0" ./build/px4_sitl_default/bin/px4 -i 2
-  ```
+### Transition from manual launch
 
-- **Terminal 4 — Instance 3 (`x500_3`, `sysid=4`, `/px4_3`, attaches to existing Gazebo server at `10, 0`):**
-  ```bash
-  cd ~/projects/thermal-swarm-sitl-poc/PX4-Autopilot
-  export GZ_IP=127.0.0.1
-  HEADLESS=1 PX4_GZ_STANDALONE=1 PX4_SYS_AUTOSTART=4001 PX4_SIM_MODEL=gz_x500 PX4_GZ_MODEL_POSE="10,0" ./build/px4_sitl_default/bin/px4 -i 3
-  ```
+The prior manual workflow started `MicroXRCEAgent udp4 -p 8888` in one terminal and the three documented PX4 commands in three more terminals. End that manually managed session yourself, confirm no PX4/Gazebo processes remain, then use `./scripts/sim.sh start`. Do not ask the launcher to adopt or stop a manual session; it only stops processes recorded in its own runtime manifest.
 
 ---
 
@@ -276,7 +306,7 @@ Open three separate terminals. In each terminal, navigate to `PX4-Autopilot` and
 
 ### 8.1 Automated Read-Only Pre-Flight Check (`./scripts/check.sh`)
 
-Once the Micro XRCE-DDS Agent and all three PX4 SITL instances are running, verify the simulation state from **Terminal 5**:
+Once the Micro XRCE-DDS Agent and all three PX4 SITL instances are running, verify the simulation state from a sourced terminal:
 
 ```bash
 cd ~/projects/thermal-swarm-sitl-poc
@@ -293,9 +323,7 @@ You can run static syntax compilation and the offline unit test suite at any tim
 
 ```bash
 cd ~/projects/thermal-swarm-sitl-poc
-source /opt/ros/jazzy/setup.bash
-source ros2_ws/install/setup.bash
-source .venv-ros/bin/activate
+source scripts/env.sh
 
 # Python syntax verification
 python3 -m py_compile scripts/*.py
@@ -310,14 +338,18 @@ Only after `./scripts/check.sh` reports `CHECK PASS: GZ CHECK ve AUDIT başarıl
 
 ```bash
 cd ~/projects/thermal-swarm-sitl-poc
-source /opt/ros/jazzy/setup.bash
-source ros2_ws/install/setup.bash
-source .venv-ros/bin/activate
+source scripts/env.sh
 export GZ_IP=127.0.0.1
 
 # Execute the 3-UAV autonomous mission (Takeoff -> 15/15 Waypoints -> RTH -> Land -> Disarm)
 python3 scripts/thermoswarm_three_x500_v3.py --execute
+
+# Only after all 3 vehicles have landed and disarmed:
+./scripts/sim.sh stop
+./scripts/sim.sh status
 ```
+
+Run the flight command yourself as a separate step after `GZ CHECK PASS` and `AUDIT PASS (3/3)`. Setup never runs it. This command retains the historically verified v3 controller; validating the packaged controller in flight is separate acceptance work.
 
 ---
 

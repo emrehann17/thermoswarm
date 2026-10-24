@@ -1,0 +1,46 @@
+# Recorded from the working Python 3.12 build environment, 2026-10-24.
+# Constraints for the pinned PX4 Tools/setup/requirements.txt; used only in .venv-px4.
+# Distribution metadata may omit transitive dependencies; final resolution is saved locally.
+argcomplete==3.7.2
+attrs==23.2.0
+cerberus==1.3.8
+contourpy==1.4.0
+coverage==7.16.2
+cycler==0.12.1
+empy==3.3.4
+fastcrc==0.5.0
+fonttools==4.67.0
+future==1.0.0
+importlib-resources==7.1.0
+jinja2==3.1.2
+jsonschema==4.10.3
+kconfiglib==14.1.0
+kiwisolver==1.5.1
+lark==1.3.1
+lxml==6.1.3
+matplotlib==3.11.2
+mpmath==1.3.0
+numpy==2.5.4
+nunavut==2.3.1
+packaging==26.3
+pandas==3.0.6
+pillow==13.0.0
+pkgconfig==1.6.0
+psutil==7.2.2
+pycryptodome==4.0.1
+pydsdl==1.25.0
+pygments==2.17.2
+pymavlink==2.4.50
+pyparsing==3.1.1
+pyros-genmsg==0.5.8
+pyrsistent==0.20.0
+pyserial==3.5
+python-dateutil==2.9.0.post0
+pyulog==1.2.4
+pyyaml==6.0.1
+requests==2.31.0
+setuptools==68.1.2
+six==1.16.0
+sympy==1.14.0
+toml==0.10.2
+wheel==0.42.0

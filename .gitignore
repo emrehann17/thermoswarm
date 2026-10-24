@@ -27,6 +27,7 @@ ros2_ws/log/
 /artifacts/
 /logs/
 /rosbags/
+/.runtime/
 
 # Additional ROS build outputs
 **/build/
