@@ -16,6 +16,9 @@ import socket
 import subprocess
 import sys
 import time
+import shlex
+
+from wildfire_assets import WORLD as WILDFIRE_WORLD, TOPIC as THERMAL_TOPIC, prepare as prepare_wildfire, resource_env
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -124,6 +127,7 @@ def proc_description(record):
 
 def status():
     state = load_state()
+    print(f"Dünya: {state.get('world', 'default')}")
     if not state["processes"]:
         print("Yönetilen simülasyon yok.")
     for rec in state["processes"]:
@@ -144,7 +148,7 @@ def command_candidates():
         joined = " ".join(argv)
         basename = Path(argv[0]).name if argv else ""
         is_px4 = basename == "px4" and str(ROOT / "PX4-Autopilot") in cwd
-        is_gz_server = basename in {"gz", "ruby"} and "gz sim" in joined
+        is_gz_server = (basename in {"gz", "ruby"} and "gz sim" in joined) or bool(argv and argv[0].startswith('gz sim'))
         if is_px4 or is_gz_server:
             found.append((int(entry.name), joined, cwd))
     return found
@@ -308,8 +312,8 @@ def check_ros_topics(timeout=5):
                                        f"eksik topic'ler: {', '.join(missing)}; {err.strip()}")
 
 
-def verify_world():
-    cmd = [sys.executable, str(ROOT / "scripts/thermoswarm_gz_world_check.py")]
+def verify_world(world='default'):
+    cmd = [sys.executable, str(ROOT / "scripts/thermoswarm_gz_world_check.py"), '--world', world]
     code, out, err = run_query(cmd, timeout=25)
     if code:
         raise SimError(f"Gazebo dünya doğrulaması başarısız:\n{out}{err}")
@@ -347,7 +351,15 @@ def launch_one(name, argv, cwd, env, logfile, records, state):
     return rec
 
 
-def start(config_path=None, dry_run=False):
+def wildfire_ros_env(env):
+    setup = f"source /opt/ros/jazzy/setup.bash; source {shlex.quote(str(ROOT / 'ros2_ws/install/setup.bash'))}; env -0"
+    result = subprocess.run(['bash', '-ec', setup], capture_output=True, env=env, check=True)
+    return dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if b'=' in item)
+
+
+def start(config_path=None, dry_run=False, world='default', render_mode='egl'):
+    if world not in ('default', 'wildfire') or render_mode not in ('egl', 'x11'):
+        raise SimError('Desteklenmeyen dünya/render seçeneği')
     fleet = load_fleet(config_path)
     previous = load_state()
     live = [r for r in previous["processes"] if matches(r)]
@@ -355,14 +367,27 @@ def start(config_path=None, dry_run=False):
         raise SimError("Yönetilen süreçler zaten çalışıyor; çift start reddedildi:\n  " +
                        "\n  ".join(proc_description(r) for r in live))
     require_dependencies()
+    if world == 'wildfire':
+        bridge = Path('/opt/ros/jazzy/lib/ros_gz_bridge/parameter_bridge')
+        if not bridge.is_file():
+            raise SimError('Wildfire requires ros-jazzy-ros-gz-bridge; inspect scripts/setup.sh --plan.')
+        try:
+            prepare_wildfire(ROOT, write=False)
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+            raise SimError(str(exc)) from exc
     if dry_run:
         print(f"Fleet PASS: {fleet.source}")
+        print(f"DRY RUN: world={world}, render={render_mode}")
+        if world == 'wildfire':
+            print(f"DRY RUN: gz sim -r -s {ROOT / 'worlds/thermoswarm_wildfire.sdf'} (OGRE2)")
+            print(f"DRY RUN: ros_gz_bridge {THERMAL_TOPIC} GZ_TO_ROS")
         print("DRY RUN: MicroXRCEAgent udp4 -p 8888")
         px4 = ROOT / "PX4-Autopilot/build/px4_sitl_default/bin/px4"
         for vehicle in fleet.vehicles:
             name, instance, pose = vehicle.name, vehicle.px4_instance, vehicle.spawn_xy_m
-            extra = " PX4_GZ_STANDALONE=1" if instance > 1 else " (Gazebo server başlatır)"
-            print(f"DRY RUN:{extra} PX4_GZ_MODEL_POSE='{pose[0]:g},{pose[1]:g}' {px4} -i {instance} [{name}]")
+            extra = (f" PX4_GZ_STANDALONE=1 PX4_GZ_MODEL_NAME={name}" if world == 'wildfire' else
+                     " PX4_GZ_STANDALONE=1" if instance > 1 else " (Gazebo server başlatır)")
+            print(f"DRY RUN:{extra} PX4_GZ_MODEL_POSE='{pose[0]:g},{pose[1]:g}' {px4} -d -i {instance} [{name}]")
         return
     conflicts = command_candidates()
     if conflicts:
@@ -375,11 +400,30 @@ def start(config_path=None, dry_run=False):
     px4_cwd = ROOT / "PX4-Autopilot"
     env = os.environ.copy()
     env.update({"HEADLESS": "1", "GZ_IP": "127.0.0.1", "PX4_SYS_AUTOSTART": "4001",
-                "PX4_SIM_MODEL": "gz_x500"})
+                "PX4_SIM_MODEL": "gz_x500", 'PX4_GZ_WORLD': 'default'})
+    env.pop('PX4_GZ_MODEL_NAME', None)
+    if world == 'wildfire':
+        prepare_wildfire(ROOT)
+        env.update({key: value for key, value in resource_env(ROOT).items()
+                    if key in ('GZ_SIM_RESOURCE_PATH', 'SDF_PATH')})
+        env['PX4_GZ_WORLD'] = WILDFIRE_WORLD
     RUNTIME.mkdir(parents=True, exist_ok=True)
     records = []
-    state = {"version": 1, "created": time.time(), "processes": []}
+    state = {"version": 1, "created": time.time(), "world": world, "render_mode": render_mode, "processes": []}
     try:
+        if world == 'wildfire':
+            gz_argv = ['gz', 'sim', '-r', '-s', '--render-engine', 'ogre2']
+            if render_mode == 'egl':
+                gz_argv.append('--headless-rendering')
+            gz_argv.append(str(ROOT / 'worlds/thermoswarm_wildfire.sdf'))
+            launch_one('gazebo-wildfire', [sys.executable, str(ROOT / 'scripts/sim_process.py'), *gz_argv],
+                       ROOT, env, 'gazebo-wildfire.log', records, state)
+            wait_until('wildfire world / x500_1', fleet.safety.readiness_timeout_s,
+                       lambda: gz_has_model('x500_1'), records)
+            bridge_env = wildfire_ros_env(env)
+            bridge_argv = [str(bridge), '--ros-args', '-p',
+                           f'config_file:={ROOT / "config/thermal_bridge.yaml"}']
+            launch_one('thermal-bridge', bridge_argv, ROOT, bridge_env, 'thermal-bridge.log', records, state)
         agent = shutil.which("MicroXRCEAgent")
         launch_one("dds-agent", [agent, "udp4", "-p", "8888"], px4_cwd, env,
                    "dds-agent.log", records, state)
@@ -390,19 +434,31 @@ def start(config_path=None, dry_run=False):
             name, instance, pose = vehicle.name, vehicle.px4_instance, vehicle.spawn_xy_m
             proc_env = env.copy()
             proc_env["PX4_GZ_MODEL_POSE"] = f"{pose[0]:g},{pose[1]:g}"
-            if instance > 1:
+            if world == 'wildfire':
+                proc_env['PX4_GZ_MODEL_NAME'] = name
+                proc_env['PX4_GZ_STANDALONE'] = '1'
+            elif instance > 1:
                 proc_env["PX4_GZ_STANDALONE"] = "1"
             else:
                 proc_env.pop("PX4_GZ_STANDALONE", None)
             log = f"px4-{instance}.log"
-            rec = launch_one(name, [str(px4), "-i", str(instance)], px4_cwd, proc_env,
+            # A detached stdin makes the interactive pxh shell busy-loop. Daemon
+            # mode only disables that console; all PX4 startup/control is unchanged.
+            rec = launch_one(name, [str(px4), '-d', "-i", str(instance)], px4_cwd, proc_env,
                              log, records, state)
             wait_until(f"Gazebo modeli {name}", fleet.safety.readiness_timeout_s,
                        lambda n=name: gz_has_model(n), records)
 
-        verify_world()
+        verify_world(world)
         wait_until("üç ROS 2 telemetri topic'i", min(fleet.safety.readiness_timeout_s, 90),
                    check_ros_topics, records)
+        if world == 'wildfire':
+            code, out, err = run_query(['/usr/bin/python3', str(ROOT / 'scripts/thermal_check.py'),
+                                       '--transport', 'ros', '--frames', '3', '--timeout', '20'],
+                                      timeout=25, env=bridge_env)
+            if code:
+                raise SimError(f'Thermal image readiness failed: {out}{err}')
+            print(out.rstrip())
         print("SIM START PASS: 3 X500, DDS Agent ve ROS 2 topic readiness doğrulandı. ARM/uçuş komutu gönderilmedi.")
         print(f"Loglar: {RUNTIME}")
     except (Exception, KeyboardInterrupt) as exc:
@@ -469,7 +525,11 @@ def logs(tail=0):
         print(f"== {path} ==")
         if tail:
             try:
-                lines = path.read_text(errors="replace").splitlines()
+                # Old interactive PX4 logs may contain enormous newline-free
+                # prompt runs. Bound memory and output even for those logs.
+                with path.open('rb') as stream:
+                    stream.seek(max(0, path.stat().st_size - 256 * 1024))
+                    lines = stream.read().decode(errors='replace').splitlines()
                 print("\n".join(lines[-tail:]))
             except OSError as exc:
                 print(f"Log okunamadı: {exc}")
@@ -477,7 +537,10 @@ def logs(tail=0):
 
 def check():
     script = ROOT / "scripts/check.sh"
-    result = subprocess.run([str(script)], cwd=ROOT, check=False)
+    world = load_state().get('world', 'default')
+    if world not in ('default', 'wildfire'):
+        raise SimError('Runtime state dünya seçimi geçersiz')
+    result = subprocess.run([str(script), '--world', world], cwd=ROOT, check=False)
     if result.returncode:
         raise SimError(f"check.sh başarısız (exit={result.returncode})")
 
@@ -487,6 +550,9 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     start_parser = sub.add_parser("start", help="SITL altyapısını başlat")
     start_parser.add_argument("--config", help=argparse.SUPPRESS)
+    start_parser.add_argument('--world', choices=('default', 'wildfire'), default='default')
+    start_parser.add_argument('--render-mode', choices=('egl', 'x11'), default='egl',
+                              help='Wildfire OGRE2: EGL headless veya mevcut X11/WSLg ekranı')
     start_parser.add_argument("--dry-run", action="store_true", help="Doğrula ve komut planını göster; süreç başlatma")
     sub.add_parser("status", help="Yönetilen süreçleri salt okunur göster")
     sub.add_parser("check", help="Mevcut Gazebo ve telemetry denetimlerini çalıştır")
@@ -496,7 +562,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     def dispatch():
         if args.command == "start":
-            start(args.config, args.dry_run)
+            start(args.config, args.dry_run, args.world, args.render_mode)
         elif args.command == "status":
             status()
         elif args.command == "check":

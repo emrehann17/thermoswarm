@@ -1,0 +1,110 @@
+{
+  "pass": true,
+  "test_kind": "real rendering, STATIC elevated X500; NOT a flight test",
+  "gz_partition": "thermoswarm-optics-62013a2de67149839d7f9665c69a196d",
+  "ros_domain_id": 88,
+  "render_mode": "egl",
+  "model_poses": [
+    [
+      0,
+      0,
+      5
+    ],
+    [
+      0,
+      2,
+      5
+    ]
+  ],
+  "camera_follows_model_shift_px": 63.0,
+  "gazebo": {
+    "width": 320,
+    "height": 240,
+    "encoding": "mono8",
+    "step": 320,
+    "stamp": 0.008,
+    "frame_id": "x500_1/thermal_camera_optical",
+    "min_gray": 100,
+    "max_gray": 200,
+    "contrast_gray": 100,
+    "temperature_range_K_approx": [
+      300,
+      600
+    ],
+    "hot_pixels": 1369,
+    "hot_fraction": 0.017825520833333334,
+    "ambient_pixels": 75431,
+    "hot_centroid_px": [
+      128.0,
+      88.0
+    ],
+    "hot_visible": true,
+    "transport": "gz",
+    "topic": "/thermoswarm/x500_1/thermal/image",
+    "frames_received": 16,
+    "simulation_hz": 8.02997858672377,
+    "arrival_hz": 8.02085652413547,
+    "source": "live sensor subscription; no synthetic image",
+    "pass": true
+  },
+  "ros": {
+    "width": 320,
+    "height": 240,
+    "encoding": "mono8",
+    "step": 320,
+    "stamp": 2.5,
+    "frame_id": "x500_1/thermal_camera_optical",
+    "min_gray": 100,
+    "max_gray": 200,
+    "contrast_gray": 100,
+    "temperature_range_K_approx": [
+      300,
+      600
+    ],
+    "hot_pixels": 1369,
+    "hot_fraction": 0.017825520833333334,
+    "ambient_pixels": 75431,
+    "hot_centroid_px": [
+      128.0,
+      88.0
+    ],
+    "hot_visible": true,
+    "transport": "ros",
+    "topic": "/thermoswarm/x500_1/thermal/image",
+    "frames_received": 16,
+    "simulation_hz": 7.995735607675905,
+    "arrival_hz": 7.987827666802832,
+    "source": "live sensor subscription; no synthetic image",
+    "pass": true
+  },
+  "translated_gazebo": {
+    "width": 320,
+    "height": 240,
+    "encoding": "mono8",
+    "step": 320,
+    "stamp": 6.0,
+    "frame_id": "x500_1/thermal_camera_optical",
+    "min_gray": 100,
+    "max_gray": 200,
+    "contrast_gray": 100,
+    "temperature_range_K_approx": [
+      300,
+      600
+    ],
+    "hot_pixels": 1369,
+    "hot_fraction": 0.017825520833333334,
+    "ambient_pixels": 75431,
+    "hot_centroid_px": [
+      191.0,
+      88.0
+    ],
+    "hot_visible": true,
+    "transport": "gz",
+    "topic": "/thermoswarm/x500_1/thermal/image",
+    "frames_received": 16,
+    "simulation_hz": 7.995735607675905,
+    "arrival_hz": 7.986046017992976,
+    "source": "live sensor subscription; no synthetic image",
+    "pass": true
+  }
+}

@@ -63,6 +63,7 @@ PACKAGES=(ca-certificates curl gnupg git procps util-linux build-essential cmake
     pkg-config python3-dev python3-venv python3-pip python3-setuptools python3-wheel
     python3-yaml python3-pytest python3-colcon-common-extensions python3-empy
     ros-jazzy-ros-base ros-jazzy-ament-cmake ros-jazzy-rosidl-default-generators
+    ros-jazzy-ros-gz-bridge python3-gz-transport13 python3-gz-msgs10
     gz-harmonic libgz-sim8-dev libeigen3-dev libssl-dev libtinyxml2-dev
     libxml2-dev libxml2-utils libunwind-dev cppzmq-dev protobuf-compiler
     libprotobuf-dev libopencv-dev libgstreamer-plugins-base1.0-dev
@@ -156,6 +157,7 @@ check_all() {
 plan() {
     echo "ThermoSwarm setup plan ($ROOT)"
     echo 'Target: Ubuntu 24.04 / ROS Jazzy / Gazebo Harmonic / PX4 1.17.0 / Agent 2.4.3'
+    echo 'Wildfire image dependencies: ros-jazzy-ros-gz-bridge, python3-gz-transport13, python3-gz-msgs10.'
     platform_ok || echo 'BLOCKED: requires Ubuntu 24.04 amd64/arm64.'
     missing_packages
     if (( ${#MISSING[@]} )); then
